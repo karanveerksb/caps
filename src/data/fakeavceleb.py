@@ -68,19 +68,53 @@ def normalize_label(category_code: str, type_name: str) -> tuple[str, int, str]:
     return RAW_TO_NORMALIZED_CATEGORY[key]
 
 
+def _relative_dir_variants(relative_dir: str) -> List[Path]:
+    """Generate plausible relative directory variants seen across FakeAVCeleb layouts."""
+
+    base = Path(relative_dir)
+    variants = [base]
+
+    if base.parts and base.parts[0] == "FakeAVCeleb" and len(base.parts) > 1:
+        variants.append(Path(*base.parts[1:]))
+
+    deduped: List[Path] = []
+    seen = set()
+    for variant in variants:
+        key = variant.as_posix()
+        if key not in seen:
+            deduped.append(variant)
+            seen.add(key)
+    return deduped
+
+
 def resolve_video_path(
     metadata_path: str | Path,
     relative_dir: str,
     file_name: str,
     dataset_root: str | Path | None = None,
 ) -> Path:
-    """Resolve the sample video path, preferring an explicit dataset root when available."""
+    """Resolve the sample video path across common FakeAVCeleb directory layouts."""
+
+    metadata_parent = Path(metadata_path).expanduser().resolve().parent
+    anchors: List[Path] = []
 
     if dataset_root is not None:
-        anchor = Path(dataset_root).expanduser().resolve()
-    else:
-        anchor = Path(metadata_path).expanduser().resolve().parent
-    return anchor / relative_dir / file_name
+        anchors.append(Path(dataset_root).expanduser().resolve())
+    anchors.append(metadata_parent)
+
+    candidates: List[Path] = []
+    for anchor in anchors:
+        for relative_variant in _relative_dir_variants(relative_dir):
+            candidate = anchor / relative_variant / file_name
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    # Deterministic fallback when the underlying files are not present locally.
+    return candidates[0]
 
 
 def _normalize_record(

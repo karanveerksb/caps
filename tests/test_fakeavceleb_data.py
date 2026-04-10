@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from src.data.fakeavceleb import (
     FakeAVCelebDataset,
+    _relative_dir_variants,
     generate_stratified_splits,
     load_fakeavceleb_metadata,
     normalize_headers,
@@ -82,6 +83,14 @@ def test_normalize_label_maps_expected_categories() -> None:
     assert normalize_label("D", "FakeVideo-FakeAudio") == ("FAFV", 1, "both")
 
 
+def test_relative_dir_variants_include_stripped_fakeavceleb_prefix() -> None:
+    variants = _relative_dir_variants("FakeAVCeleb/RealVideo-RealAudio/African/men/id0001")
+    assert variants == [
+        Path("FakeAVCeleb/RealVideo-RealAudio/African/men/id0001"),
+        Path("RealVideo-RealAudio/African/men/id0001"),
+    ]
+
+
 def test_resolve_video_path_uses_metadata_parent() -> None:
     metadata_path = Path("/data/FakeAVCeleb_v1.2/meta_data.csv")
     resolved = resolve_video_path(
@@ -107,6 +116,33 @@ def test_resolve_video_path_prefers_dataset_root_when_provided() -> None:
     )
 
 
+def test_resolve_video_path_uses_existing_metadata_parent_variant(tmp_path: Path) -> None:
+    metadata_dir = tmp_path / "FakeAVCeleb_v1.2" / "FakeAVCeleb_v1.2"
+    metadata_dir.mkdir(parents=True)
+    metadata_path = metadata_dir / "meta_data.csv"
+    metadata_path.write_text("source,target1,target2,method,category,type,race,gender,path,\n", encoding="utf-8")
+
+    actual_file = (
+        metadata_dir
+        / "RealVideo-RealAudio"
+        / "African"
+        / "men"
+        / "id0001"
+        / "00001.mp4"
+    )
+    actual_file.parent.mkdir(parents=True)
+    actual_file.write_text("placeholder", encoding="utf-8")
+
+    resolved = resolve_video_path(
+        metadata_path,
+        "FakeAVCeleb/RealVideo-RealAudio/African/men/id0001",
+        "00001.mp4",
+        dataset_root=tmp_path / "dataset",
+    )
+
+    assert resolved == actual_file
+
+
 def test_load_metadata_parses_expected_fields(tmp_path: Path) -> None:
     metadata_path = tmp_path / "meta_data.csv"
     _write_metadata_csv(metadata_path)
@@ -129,6 +165,28 @@ def test_load_metadata_uses_dataset_root_when_supplied(tmp_path: Path) -> None:
     assert records[0]["video_path"] == (
         "/workspace/try/dataset/FakeAVCeleb/RealVideo-RealAudio/African/men/id0001/00001.mp4"
     )
+
+
+def test_load_metadata_prefers_existing_metadata_parent_variant(tmp_path: Path) -> None:
+    metadata_dir = tmp_path / "FakeAVCeleb_v1.2" / "FakeAVCeleb_v1.2"
+    metadata_dir.mkdir(parents=True)
+    metadata_path = metadata_dir / "meta_data.csv"
+    _write_metadata_csv(metadata_path)
+
+    actual_file = (
+        metadata_dir
+        / "RealVideo-RealAudio"
+        / "African"
+        / "men"
+        / "id0001"
+        / "00001.mp4"
+    )
+    actual_file.parent.mkdir(parents=True)
+    actual_file.write_text("placeholder", encoding="utf-8")
+
+    records = load_fakeavceleb_metadata(metadata_path, dataset_root=tmp_path / "dataset")
+
+    assert records[0]["video_path"] == str(actual_file)
 
 
 def test_generate_stratified_splits_preserves_all_rows() -> None:
