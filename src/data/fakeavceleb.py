@@ -68,17 +68,26 @@ def normalize_label(category_code: str, type_name: str) -> tuple[str, int, str]:
     return RAW_TO_NORMALIZED_CATEGORY[key]
 
 
-def resolve_video_path(metadata_path: str | Path, relative_dir: str, file_name: str) -> Path:
-    """Resolve the sample video path using the metadata location as anchor."""
+def resolve_video_path(
+    metadata_path: str | Path,
+    relative_dir: str,
+    file_name: str,
+    dataset_root: str | Path | None = None,
+) -> Path:
+    """Resolve the sample video path, preferring an explicit dataset root when available."""
 
-    metadata_parent = Path(metadata_path).expanduser().resolve().parent
-    return metadata_parent / relative_dir / file_name
+    if dataset_root is not None:
+        anchor = Path(dataset_root).expanduser().resolve()
+    else:
+        anchor = Path(metadata_path).expanduser().resolve().parent
+    return anchor / relative_dir / file_name
 
 
 def _normalize_record(
     row: Dict[str, str],
     metadata_path: str | Path,
     sample_index: int,
+    dataset_root: str | Path | None = None,
 ) -> Dict[str, str]:
     required_keys = [
         "source",
@@ -99,7 +108,12 @@ def _normalize_record(
     normalized_category, binary_label, manipulation_target = normalize_label(
         row["category"], row["type"]
     )
-    video_path = resolve_video_path(metadata_path, row["relative_dir"], row["path"])
+    video_path = resolve_video_path(
+        metadata_path,
+        row["relative_dir"],
+        row["path"],
+        dataset_root=dataset_root,
+    )
 
     return {
         "sample_index": str(sample_index),
@@ -123,6 +137,7 @@ def _normalize_record(
 
 def load_fakeavceleb_metadata(
     metadata_path: str | Path,
+    dataset_root: str | Path | None = None,
     logger: logging.Logger | None = None,
 ) -> List[Dict[str, str]]:
     """Parse FakeAVCeleb metadata CSV into a canonical manifest-like structure."""
@@ -144,7 +159,12 @@ def load_fakeavceleb_metadata(
             raw_category_counts[row.get("category", "")] += 1
             raw_type_counts[row.get("type", "")] += 1
             try:
-                record = _normalize_record(row, metadata_path, sample_index)
+                record = _normalize_record(
+                    row,
+                    metadata_path,
+                    sample_index,
+                    dataset_root=dataset_root,
+                )
             except ValueError as exc:
                 malformed_rows += 1
                 if logger:

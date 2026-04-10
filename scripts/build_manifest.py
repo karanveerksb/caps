@@ -47,7 +47,11 @@ def main() -> None:
     logger.info("Resolved metadata path: %s", args.metadata_path.expanduser().resolve())
     logger.info("Log file: %s", log_path)
 
-    records = load_fakeavceleb_metadata(args.metadata_path, logger=logger)
+    records = load_fakeavceleb_metadata(
+        args.metadata_path,
+        dataset_root=args.dataset_root,
+        logger=logger,
+    )
     logger.info("Manifest row count: %s", len(records))
     logger.info("Manifest category counts: %s", summarize_counts(records, "category"))
 

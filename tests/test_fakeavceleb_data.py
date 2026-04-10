@@ -94,6 +94,19 @@ def test_resolve_video_path_uses_metadata_parent() -> None:
     )
 
 
+def test_resolve_video_path_prefers_dataset_root_when_provided() -> None:
+    metadata_path = Path("/data/FakeAVCeleb_v1.2/meta_data.csv")
+    resolved = resolve_video_path(
+        metadata_path,
+        "FakeAVCeleb/RealVideo-RealAudio/African/men/id0001",
+        "00001.mp4",
+        dataset_root="/workspace/try/dataset",
+    )
+    assert resolved == Path(
+        "/workspace/try/dataset/FakeAVCeleb/RealVideo-RealAudio/African/men/id0001/00001.mp4"
+    )
+
+
 def test_load_metadata_parses_expected_fields(tmp_path: Path) -> None:
     metadata_path = tmp_path / "meta_data.csv"
     _write_metadata_csv(metadata_path)
@@ -105,6 +118,17 @@ def test_load_metadata_parses_expected_fields(tmp_path: Path) -> None:
     assert records[1]["category"] == "RAFV"
     assert records[2]["binary_label"] == "1"
     assert records[3]["manipulation_target"] == "both"
+
+
+def test_load_metadata_uses_dataset_root_when_supplied(tmp_path: Path) -> None:
+    metadata_path = tmp_path / "meta_data.csv"
+    _write_metadata_csv(metadata_path)
+
+    records = load_fakeavceleb_metadata(metadata_path, dataset_root="/workspace/try/dataset")
+
+    assert records[0]["video_path"] == (
+        "/workspace/try/dataset/FakeAVCeleb/RealVideo-RealAudio/African/men/id0001/00001.mp4"
+    )
 
 
 def test_generate_stratified_splits_preserves_all_rows() -> None:
